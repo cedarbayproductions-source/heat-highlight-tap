@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from 'react'
+import { BUILD_STAMP } from './buildStamp'
 import { exportJson } from './exportJson'
 import { exportFcpXml } from './exportXml'
 import {
@@ -1150,6 +1151,9 @@ export default function App() {
         {!game.fetchedAtIso && game.source === 'caha'
           ? ` · fallback ${FALLBACK_GAME.opponentShort}`
           : ''}
+        <span className="mt-1 block tabular-nums opacity-80">
+          build {BUILD_STAMP}
+        </span>
       </footer>
     </div>
   )
