@@ -209,6 +209,10 @@ export default function App() {
     () => loadOpenShift()?.player ?? DEFAULT_SHIFT_PLAYER,
   )
   const [nowMs, setNowMs] = useState(() => Date.now())
+  /** Non-null = show Sync-before-Shift reminder; value is backdate ms for Continue. */
+  const [pendingShiftBackdate, setPendingShiftBackdate] = useState<
+    number | null
+  >(null)
 
   useEffect(() => {
     setTaps(loadTaps(game))
@@ -302,8 +306,24 @@ export default function App() {
     if (next) setShiftPlayer(next.player)
   }
 
-  function shiftOn(backdateMs = 0) {
+  function hasSyncForActiveGame(): boolean {
+    return taps.some((t) => {
+      if (t.type !== 'sync') return false
+      if (game.gameId != null && t.gameId != null) {
+        return t.gameId === game.gameId
+      }
+      if (game.source === 'manual') {
+        return t.gameSource === 'manual' && t.opponent === game.opponent
+      }
+      return (
+        t.opponentShort === game.opponentShort || t.opponent === game.opponent
+      )
+    })
+  }
+
+  function doShiftOn(backdateMs = 0) {
     if (openShift) return
+    setPendingShiftBackdate(null)
     setCustomOpen(false)
     setDraft(null)
     const startWallMs = Date.now() - backdateMs
@@ -315,6 +335,30 @@ export default function App() {
       startWallMs,
       startWallIso,
     })
+  }
+
+  /** Shift On / On (−30s): remind if no Sync yet for this game. */
+  function shiftOn(backdateMs = 0) {
+    if (openShift) return
+    if (!hasSyncForActiveGame()) {
+      setPendingShiftBackdate(backdateMs)
+      return
+    }
+    doShiftOn(backdateMs)
+  }
+
+  function dismissShiftSyncReminder() {
+    setPendingShiftBackdate(null)
+  }
+
+  function continueShiftWithoutSync() {
+    if (pendingShiftBackdate == null) return
+    doShiftOn(pendingShiftBackdate)
+  }
+
+  function goToSyncFromShiftReminder() {
+    setPendingShiftBackdate(null)
+    onSync()
   }
 
   function shiftOff() {
@@ -506,6 +550,54 @@ export default function App() {
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-lg flex-col px-4 pb-10 pt-[max(1rem,env(safe-area-inset-top))]">
+      {pendingShiftBackdate != null ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={`${uid}-sync-reminder-title`}
+        >
+          <div className="sheet-enter w-full max-w-sm rounded-2xl border border-[var(--panel-edge)] bg-[var(--panel)] p-5 shadow-xl backdrop-blur-sm">
+            <p
+              id={`${uid}-sync-reminder-title`}
+              className="font-[family-name:var(--display)] text-xl font-semibold uppercase tracking-wide text-[var(--ink)]"
+            >
+              No Sync yet
+            </p>
+            <p className="mt-3 text-base text-[var(--ink)]">
+              Add a Sync (puck drop / rink clock) so shifts line up in Premiere.
+              Without it, Export XML media times may be wrong.
+            </p>
+            <p className="mt-2 text-sm text-[var(--muted)]">
+              Best at puck drop — clock defaults to 16:00.
+            </p>
+            <div className="mt-5 flex flex-col gap-2.5">
+              <button
+                type="button"
+                onClick={goToSyncFromShiftReminder}
+                className="w-full rounded-xl border-[3px] border-[var(--ice)] bg-[linear-gradient(165deg,#1a3a4d,#0e2433)] px-4 py-3.5 font-[family-name:var(--display)] text-lg font-bold uppercase tracking-wide text-[var(--ink)]"
+              >
+                Go to Sync
+              </button>
+              <button
+                type="button"
+                onClick={continueShiftWithoutSync}
+                className="w-full rounded-xl border-2 border-[var(--shift)] bg-[linear-gradient(165deg,#2a5240,#1a3328)] px-4 py-3 text-base font-semibold text-[var(--ink)]"
+              >
+                Continue anyway
+              </button>
+              <button
+                type="button"
+                onClick={dismissShiftSyncReminder}
+                className="w-full rounded-xl border border-[var(--panel-edge)] bg-transparent px-4 py-2.5 text-sm font-semibold text-[var(--muted)]"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <header className="mb-5 text-center">
         <p className="font-[family-name:var(--display)] text-4xl font-bold uppercase tracking-[0.08em] text-[var(--heat-red-hot)] sm:text-5xl">
           California Heat
