@@ -1,0 +1,128 @@
+@import 'https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap';
+@import 'tailwindcss';
+
+:root {
+  --heat-red: #c8102e;
+  --heat-red-hot: #e11d3a;
+  --heat-red-deep: #8b0a1e;
+  --ice: #9ec5d9;
+  --shift: #6fb892;
+  --shift-hot: #8fd4ad;
+  --ink: #e8eef4;
+  --muted: #8a9aad;
+  --panel: #121a24eb;
+  --panel-edge: #9ec5d92e;
+  --bg0: #070b10;
+  --bg1: #121a24;
+  --bg2: #1a2736;
+  --sans: 'Barlow', 'Trebuchet MS', sans-serif;
+  --display: 'Oswald', 'Arial Narrow', sans-serif;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--sans);
+  color: var(--ink);
+  background:
+    radial-gradient(ellipse 120% 80% at 50% -20%, #c8102e47, transparent 55%),
+    radial-gradient(ellipse 90% 60% at 100% 100%, #1e507838, transparent 50%),
+    linear-gradient(165deg, var(--bg0) 0%, var(--bg1) 45%, var(--bg2) 100%);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  background-attachment: fixed;
+  margin: 0;
+}
+
+button,
+select {
+  font: inherit;
+}
+
+@keyframes goal-pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 #c8102e8c;
+  }
+  70% {
+    transform: scale(1.02);
+    box-shadow: 0 0 0 28px #c8102e00;
+  }
+  to {
+    transform: scale(1);
+    box-shadow: 0 0 #c8102e00;
+  }
+}
+
+@keyframes slide-up {
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes flash-stamp {
+  0% {
+    background-color: #c8102e73;
+  }
+  to {
+    background-color: #0000;
+  }
+}
+
+.goal-btn {
+  animation: 2.4s ease-out infinite goal-pulse;
+}
+.goal-btn:active {
+  animation: none;
+  transform: scale(0.96);
+}
+
+@keyframes sync-pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 #9ec5d966;
+  }
+  70% {
+    transform: scale(1.01);
+    box-shadow: 0 0 0 18px #9ec5d900;
+  }
+  to {
+    transform: scale(1);
+    box-shadow: 0 0 #9ec5d900;
+  }
+}
+
+.sync-btn {
+  animation: 2.8s ease-out infinite sync-pulse;
+}
+.sync-btn:active {
+  animation: none;
+  transform: scale(0.98);
+}
+
+.shift-on-btn:active,
+.shift-off-btn:active {
+  transform: scale(0.98);
+}
+
+.sheet-enter {
+  animation: 0.28s ease-out both slide-up;
+}
+
+.stamp-flash {
+  animation: 0.6s ease-out flash-stamp;
+}
