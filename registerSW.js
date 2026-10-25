@@ -1,0 +1,1 @@
+if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/heat-highlight-tap/sw.js', { scope: '/heat-highlight-tap/' })})}
