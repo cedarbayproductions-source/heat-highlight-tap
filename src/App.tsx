@@ -26,6 +26,7 @@ import type {
   SyncType,
   TapEvent,
 } from './types'
+import { useScreenWakeLock } from './useScreenWakeLock'
 
 const SHIFT_BACKDATE_MS = 30_000
 const NONE = ''
@@ -214,6 +215,12 @@ export default function App() {
   const [pendingShiftBackdate, setPendingShiftBackdate] = useState<
     number | null
   >(null)
+  const {
+    keepAwake,
+    setKeepAwake,
+    active: wakeLockActive,
+    support: wakeLockSupport,
+  } = useScreenWakeLock()
 
   useEffect(() => {
     setTaps(loadTaps(game))
@@ -642,6 +649,28 @@ export default function App() {
             className="font-semibold uppercase tracking-[0.12em] text-[var(--muted)] underline decoration-[var(--panel-edge)] underline-offset-2"
           >
             Custom game
+          </button>
+          <button
+            type="button"
+            onClick={() => setKeepAwake(!keepAwake)}
+            aria-pressed={keepAwake}
+            className="font-semibold uppercase tracking-[0.12em] text-[var(--muted)] underline decoration-[var(--panel-edge)] underline-offset-2"
+            title={
+              wakeLockSupport === 'unsupported'
+                ? 'Screen Wake Lock needs a recent iOS Safari (≈16.4+)'
+                : keepAwake
+                  ? 'Screen stays on while this app is open'
+                  : 'Tap to keep screen on during the game'
+            }
+          >
+            Keep awake{' '}
+            {wakeLockSupport === 'unsupported'
+              ? '· N/A'
+              : keepAwake
+                ? wakeLockActive
+                  ? '· ON'
+                  : '· …'
+                : '· off'}
           </button>
         </div>
         {status ? (
