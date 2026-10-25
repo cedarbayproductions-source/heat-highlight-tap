@@ -1,14 +1,20 @@
-import type { TapEvent } from './types'
+import { downloadFile, exportBaseName } from './downloadFile'
+import type { ActiveGame, TapEvent } from './types'
 
-export function exportJson(taps: TapEvent[]): void {
-  const blob = new Blob([JSON.stringify(taps, null, 2)], {
-    type: 'application/json',
+export type ExportJsonResult = {
+  filename: string
+  method: 'share' | 'savePicker' | 'anchor'
+}
+
+export async function exportJson(
+  taps: TapEvent[],
+  game: ActiveGame,
+): Promise<ExportJsonResult> {
+  const filename = `${exportBaseName(game.opponentShort, game.date)}.json`
+  const result = await downloadFile({
+    contents: JSON.stringify(taps, null, 2),
+    filename,
+    mime: 'application/json',
   })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-')
-  a.href = url
-  a.download = `heat-highlight-taps-${stamp}.json`
-  a.click()
-  URL.revokeObjectURL(url)
+  return { filename, method: result.method }
 }

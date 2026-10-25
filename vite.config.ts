@@ -5,7 +5,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 const base = process.env.VITE_BASE || '/'
 /** Bump with BUILD_STAMP so Workbox opens a new cache and drops the stuck Goal-only SW. */
-const PWA_CACHE_ID = 'heat-highlight-tap-export-xml-2'
+const PWA_CACHE_ID = 'heat-highlight-tap-export-file-1'
 
 export default defineConfig({
   base,
@@ -13,13 +13,13 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
-      workbox: {
-        cacheId: PWA_CACHE_ID,
-        cleanupOutdatedCaches: true,
-        skipWaiting: true,
-        clientsClaim: true,
+      injectManifest: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff2}'],
       },
       manifest: {
         name: 'Heat Highlight Tap',

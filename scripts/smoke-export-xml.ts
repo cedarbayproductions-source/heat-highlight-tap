@@ -102,6 +102,10 @@ assert(withSync.xml.includes('<timebase>30</timebase>'), '29.97 ntsc timebase')
 assert(withSync.xml.includes('<ntsc>TRUE</ntsc>'), 'ntsc true')
 assert(!withSync.warnedNoSync, 'sync present → no warn')
 assert(withSync.shiftCount === 1 && withSync.goalCount === 1, 'counts')
+assert(
+  withSync.filename === 'heat-taps-Jr-Reign-2026-10-25.xml',
+  `filename ${withSync.filename}`,
+)
 assert(noSync.warnedNoSync, 'no sync → warn')
 
 // Shift in = 90s from sync = 90 * 29.97 ≈ 2697 frames
