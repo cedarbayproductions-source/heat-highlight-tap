@@ -1,3 +1,4 @@
+import { downloadFile, exportBaseName } from './downloadFile'
 import {
   FRAME_RATE,
   buildMediaAnchor,
@@ -19,16 +20,6 @@ function esc(s: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;')
-}
-
-function downloadText(filename: string, text: string, mime: string): void {
-  const blob = new Blob([text], { type: mime })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
 }
 
 function rateXml(): string {
@@ -276,8 +267,7 @@ ${warningComment}  <project>
 </xmeml>
 `
 
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-')
-  const filename = `heat-highlight-premiere-${stamp}.xml`
+  const filename = `${exportBaseName(game.opponentShort, game.date)}.xml`
 
   const anchorLabel = anchor.sync
     ? `${anchor.sync.syncType} · ${anchor.sync.period} ${anchor.sync.gameClock}`
@@ -296,8 +286,19 @@ ${warningComment}  <project>
   }
 }
 
-export function exportFcpXml(taps: TapEvent[], game: ActiveGame): ExportXmlResult {
+export type ExportXmlDownloadResult = ExportXmlResult & {
+  method: 'share' | 'savePicker' | 'anchor'
+}
+
+export async function exportFcpXml(
+  taps: TapEvent[],
+  game: ActiveGame,
+): Promise<ExportXmlDownloadResult> {
   const result = buildFcpXml(taps, game)
-  downloadText(result.filename, result.xml, 'application/xml')
-  return result
+  const download = await downloadFile({
+    contents: result.xml,
+    filename: result.filename,
+    mime: 'application/xml',
+  })
+  return { ...result, method: download.method }
 }

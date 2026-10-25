@@ -549,8 +549,20 @@ export default function App() {
     setOpen(null)
   }
 
-  function onExportXml() {
-    const result = exportFcpXml(taps, game)
+  async function onExportJson() {
+    const result = await exportJson(taps, game)
+    if (result.method === 'share') {
+      // Share sheet handled Save to Files / AirDrop; no extra alert.
+      return
+    }
+    window.alert(`Saved ${result.filename}`)
+  }
+
+  async function onExportXml() {
+    const result = await exportFcpXml(taps, game)
+    if (result.method === 'share') {
+      return
+    }
     if (result.warnedNoSync) {
       window.alert(
         `Exported ${result.filename}\n\nNo Sync taps — media In/Out are relative to the earliest wall stamp and may be wrong in Premiere. Add a Sync (Puck drop preferred) and re-export.\n\nMaster path placeholder:\n${result.pathurl}`,
@@ -1138,7 +1150,7 @@ export default function App() {
           <div className="flex flex-wrap justify-end gap-2">
             <button
               type="button"
-              onClick={() => exportJson(taps)}
+              onClick={() => void onExportJson()}
               disabled={!taps.length}
               className="rounded-lg border border-[var(--panel-edge)] px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--ice)] disabled:opacity-30"
             >
