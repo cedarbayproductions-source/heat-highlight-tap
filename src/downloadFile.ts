@@ -47,7 +47,13 @@ function canShareFile(file: File): boolean {
 async function tryShareFile(file: File): Promise<boolean> {
   if (!canShareFile(file)) return false
   try {
-    await navigator.share({ files: [file], title: file.name })
+    // Prefer files so iOS Share → Save to Files / AirDrop keeps heat-taps-….json.
+    // text is a short label only (not the full JSON — use Copy JSON for chat paste).
+    await navigator.share({
+      files: [file],
+      title: file.name,
+      text: file.name,
+    })
     return true
   } catch (err) {
     // User cancel is fine; fall through to other methods only on AbortError? Prefer
@@ -55,7 +61,16 @@ async function tryShareFile(file: File): Promise<boolean> {
     if (err instanceof DOMException && err.name === 'AbortError') {
       return true
     }
-    return false
+    // Retry files-only if title/text caused a reject on some WebViews.
+    try {
+      await navigator.share({ files: [file] })
+      return true
+    } catch (err2) {
+      if (err2 instanceof DOMException && err2.name === 'AbortError') {
+        return true
+      }
+      return false
+    }
   }
 }
 

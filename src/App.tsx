@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react'
 import { BUILD_STAMP } from './buildStamp'
-import { exportJson } from './exportJson'
+import { copyJson, exportJson } from './exportJson'
 import { exportFcpXml } from './exportXml'
 import {
   FALLBACK_GAME,
@@ -208,6 +208,7 @@ export default function App() {
   const [flash, setFlash] = useState(false)
   const [clockError, setClockError] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
+  const [handoffNote, setHandoffNote] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [openShift, setOpenShift] = useState<OpenShift | null>(() =>
     loadOpenShift(),
@@ -549,13 +550,25 @@ export default function App() {
     setOpen(null)
   }
 
+  async function onCopyJson() {
+    const result = await copyJson(taps, game)
+    if (result.ok) {
+      setHandoffNote(`Copied ${result.filename} — paste into Cursor chat`)
+      window.setTimeout(() => setHandoffNote(null), 4000)
+      return
+    }
+    window.alert('Copy failed — try Share JSON → Save to Files instead.')
+  }
+
   async function onExportJson() {
     const result = await exportJson(taps, game)
     if (result.method === 'share') {
-      // Share sheet handled Save to Files / AirDrop; no extra alert.
+      setHandoffNote(`Share sheet · ${result.filename} → Save to Files / AirDrop`)
+      window.setTimeout(() => setHandoffNote(null), 4000)
       return
     }
-    window.alert(`Saved ${result.filename}`)
+    setHandoffNote(`Saved ${result.filename}`)
+    window.setTimeout(() => setHandoffNote(null), 4000)
   }
 
   async function onExportXml() {
@@ -1150,15 +1163,23 @@ export default function App() {
           <div className="flex flex-wrap justify-end gap-2">
             <button
               type="button"
+              onClick={() => void onCopyJson()}
+              disabled={!taps.length}
+              className="rounded-lg border border-[var(--ice)]/60 bg-[rgba(120,180,220,0.12)] px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--ice)] disabled:opacity-30"
+            >
+              Copy JSON
+            </button>
+            <button
+              type="button"
               onClick={() => void onExportJson()}
               disabled={!taps.length}
               className="rounded-lg border border-[var(--panel-edge)] px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--ice)] disabled:opacity-30"
             >
-              Export JSON
+              Share JSON
             </button>
             <button
               type="button"
-              onClick={onExportXml}
+              onClick={() => void onExportXml()}
               disabled={!taps.length}
               className="rounded-lg border border-[var(--panel-edge)] px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--heat-red-hot)] disabled:opacity-30"
             >
@@ -1174,6 +1195,9 @@ export default function App() {
             </button>
           </div>
         </div>
+        {handoffNote ? (
+          <p className="mb-3 text-xs text-[var(--ice)]">{handoffNote}</p>
+        ) : null}
         {openShift ? (
           <div className="mb-3 rounded-xl border border-[var(--shift)]/50 bg-[rgba(60,120,90,0.12)] px-4 py-3">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--shift)]">

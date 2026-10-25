@@ -6,7 +6,7 @@ declare let self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<string | { url: string; revision: string | null }>
 }
 
-setCacheNameDetails({ prefix: 'heat-highlight-tap-export-file-1' })
+setCacheNameDetails({ prefix: 'heat-highlight-tap-export-handoff-1' })
 precacheAndRoute(self.__WB_MANIFEST)
 cleanupOutdatedCaches()
 self.skipWaiting()
