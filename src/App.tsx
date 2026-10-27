@@ -27,7 +27,6 @@ import type {
   TapEvent,
 } from './types'
 import { startLabelToTimeInput, timeInputToStartLabel } from './gameStart'
-import { useGameStartReminder } from './useGameStartReminder'
 import { useScreenWakeLock } from './useScreenWakeLock'
 
 const SHIFT_BACKDATE_MS = 30_000
@@ -226,14 +225,6 @@ export default function App() {
     active: wakeLockActive,
     support: wakeLockSupport,
   } = useScreenWakeLock()
-  const {
-    enabled: remindEnabled,
-    setEnabled: setRemindEnabled,
-    support: remindSupport,
-    status: remindStatus,
-    label: remindLabel,
-    pushArmed,
-  } = useGameStartReminder(game)
 
   useEffect(() => {
     setTaps(loadTaps(game))
@@ -689,49 +680,9 @@ export default function App() {
                   : '· …'
                 : '· off'}
           </button>
-          <button
-            type="button"
-            onClick={() => void setRemindEnabled(!remindEnabled)}
-            aria-pressed={remindEnabled}
-            className="font-semibold uppercase tracking-[0.12em] text-[var(--muted)] underline decoration-[var(--panel-edge)] underline-offset-2"
-            title={
-              remindSupport === 'needs-homescreen'
-                ? 'Add to Home Screen first (iOS needs the PWA for game-start alerts)'
-                : remindSupport === 'unsupported'
-                  ? 'Notifications not available in this browser'
-                  : remindEnabled
-                    ? pushArmed
-                      ? 'Web Push armed for when the app is closed'
-                      : 'Local reminder armed while the app can run'
-                    : 'Notify at the scheduled game start'
-            }
-          >
-            Remind at start{' '}
-            {remindSupport === 'unsupported'
-              ? '· N/A'
-              : remindSupport === 'needs-homescreen'
-                ? '· add Home Screen'
-                : remindStatus === 'denied'
-                  ? '· blocked'
-                  : remindStatus === 'needs-permission'
-                    ? '· needs permission'
-                    : remindStatus === 'no-start'
-                      ? '· no start time'
-                      : remindStatus === 'passed'
-                        ? '· start passed'
-                        : remindStatus === 'scheduled'
-                          ? `· ${remindLabel ?? 'on'}`
-                          : '· off'}
-          </button>
         </div>
         {status ? (
           <p className="mt-1 text-[10px] text-[var(--muted)]">{status}</p>
-        ) : null}
-        {remindEnabled && remindStatus === 'scheduled' ? (
-          <p className="mt-1 text-[10px] text-[var(--ice)]">
-            Reminder scheduled for {remindLabel}
-            {pushArmed ? ' · push OK when closed' : ' · open/PWA best-effort'}
-          </p>
         ) : null}
       </header>
 
@@ -807,7 +758,7 @@ export default function App() {
               <span className="mb-1.5 block text-sm font-semibold uppercase tracking-[0.12em] text-[var(--ice)]">
                 Start time{' '}
                 <span className="normal-case tracking-normal opacity-70">
-                  (optional · for Remind at start)
+                  (optional)
                 </span>
               </span>
               <input
