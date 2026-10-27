@@ -228,6 +228,7 @@ export function gameIdLabel(game: ActiveGame): string {
 export function makeManualGame(input: {
   opponent: string
   date?: string
+  start?: string
   venue?: string
   note?: string
   tournamentUrl?: string
@@ -240,7 +241,7 @@ export function makeManualGame(input: {
     opponent,
     opponentShort: shortOpponent(opponent),
     date: input.date?.trim() || null,
-    start: null,
+    start: input.start?.trim() || null,
     venue: input.venue?.trim() || null,
     side: null,
     note: input.note?.trim() || null,
