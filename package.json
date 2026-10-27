@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test:xml": "tsx scripts/smoke-export-xml.ts"
+    "test:xml": "tsx scripts/smoke-export-xml.ts",
+    "media-plan": "tsx scripts/media-plan-from-json.ts"
   },
   "dependencies": {
     "react": "^19.3.1",
