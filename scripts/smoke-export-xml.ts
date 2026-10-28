@@ -110,6 +110,21 @@ assert(!withSync.warnedNoSync, 'sync present → no warn')
 assert(withSync.shiftCount === 1 && withSync.goalCount === 1, 'counts')
 assert(noSync.warnedNoSync, 'no sync → warn')
 
+const linonMaster =
+  '/Volumes/Linon SSD1/Heat 2026 2027/VS REIGN 10 25 26/The_Cube_Ice_and_Entertainment_Center_Olympic_2026-10-25T092955.mp4'
+const withAbs = buildFcpXml(taps, game, { masterPath: linonMaster })
+assert(
+  withAbs.pathurl ===
+    'file://localhost/Volumes/Linon%20SSD1/Heat%202026%202027/VS%20REIGN%2010%2025%2026/The_Cube_Ice_and_Entertainment_Center_Olympic_2026-10-25T092955.mp4',
+  'absolute Linon pathurl',
+)
+assert(
+  withAbs.masterFileName ===
+    'The_Cube_Ice_and_Entertainment_Center_Olympic_2026-10-25T092955.mp4',
+  'basename from absolute master',
+)
+assert(withAbs.xml.includes(withAbs.pathurl), 'XML embeds absolute pathurl')
+
 // Shift in = 90s − 3s pad from sync = 87s → frames
 const postSyncInFrames = msToFrames(90_000 - SHIFT_PAD_BEFORE_MS)
 assert(
