@@ -300,3 +300,20 @@ export function masterClipPathUrl(fileName: string): string {
     .join('/')
   return `file://localhost/MEDIA/${encoded}`
 }
+
+/**
+ * Absolute master path → Premiere `file://localhost/...` pathurl.
+ * Accepts `/Volumes/...` or already-`file://` URLs. Encodes path segments
+ * (spaces etc.) the same way as {@link masterClipPathUrl}.
+ */
+export function absoluteMasterPathUrl(absPath: string): string {
+  const trimmed = absPath.trim()
+  if (/^file:\/\//i.test(trimmed)) return trimmed
+  const normalized = trimmed.replace(/\\/g, '/')
+  const withoutLeading = normalized.replace(/^\/+/, '')
+  const encoded = withoutLeading
+    .split('/')
+    .map((p) => encodeURIComponent(p).replace(/%2E/g, '.'))
+    .join('/')
+  return `file://localhost/${encoded}`
+}

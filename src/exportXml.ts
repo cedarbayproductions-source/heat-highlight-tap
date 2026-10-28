@@ -1,5 +1,6 @@
 import {
   FRAME_RATE,
+  absoluteMasterPathUrl,
   anchorLabel,
   buildMediaPlan,
   formatMediaTimecode,
@@ -194,18 +195,33 @@ export type ExportXmlResult = {
   warnings: string[]
 }
 
+export type BuildFcpXmlOptions = {
+  /**
+   * Absolute master media path (e.g. `/Volumes/Linon SSD1/.../clip.mp4`).
+   * When set, pathurl points at this file instead of the `/MEDIA/` placeholder.
+   */
+  masterPath?: string
+}
+
 export function buildFcpXml(
   taps: TapEvent[],
   game: ActiveGame,
+  options: BuildFcpXmlOptions = {},
 ): ExportXmlResult {
   const plan = buildMediaPlan(taps)
   const { anchor, shifts, goals, warnings } = plan
-  const fileName = masterClipFileName({
+  const placeholderName = masterClipFileName({
     opponentShort: game.opponentShort,
     date: game.date,
     gameId: game.gameId,
   })
-  const pathurl = masterClipPathUrl(fileName)
+  const masterPath = options.masterPath?.trim()
+  const fileName = masterPath
+    ? (masterPath.replace(/\\/g, '/').split('/').pop() ?? placeholderName)
+    : placeholderName
+  const pathurl = masterPath
+    ? absoluteMasterPathUrl(masterPath)
+    : masterClipPathUrl(placeholderName)
 
   const maxOutMs = Math.max(
     0,
