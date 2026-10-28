@@ -26,6 +26,8 @@ import type {
   SyncType,
   TapEvent,
 } from './types'
+import { startLabelToTimeInput, timeInputToStartLabel } from './gameStart'
+import { useScreenWakeLock } from './useScreenWakeLock'
 
 const SHIFT_BACKDATE_MS = 30_000
 const NONE = ''
@@ -58,6 +60,7 @@ type Draft = DraftGoal | DraftSync
 type CustomForm = {
   opponent: string
   date: string
+  start: string
   venue: string
   note: string
   tournamentUrl: string
@@ -70,6 +73,7 @@ function emptyCustom(game: ActiveGame): CustomForm {
     return {
       opponent: game.opponent,
       date: game.date ?? '',
+      start: startLabelToTimeInput(game.start),
       venue: game.venue ?? '',
       note: game.note ?? '',
       tournamentUrl: game.tournamentUrl ?? '',
@@ -80,6 +84,7 @@ function emptyCustom(game: ActiveGame): CustomForm {
   return {
     opponent: '',
     date: '',
+    start: '',
     venue: '',
     note: '',
     tournamentUrl: '',
@@ -214,6 +219,12 @@ export default function App() {
   const [pendingShiftBackdate, setPendingShiftBackdate] = useState<
     number | null
   >(null)
+  const {
+    keepAwake,
+    setKeepAwake,
+    active: wakeLockActive,
+    support: wakeLockSupport,
+  } = useScreenWakeLock()
 
   useEffect(() => {
     setTaps(loadTaps(game))
@@ -505,10 +516,14 @@ export default function App() {
 
   function saveCustom() {
     if (!custom.opponent.trim()) return
+    const start =
+      timeInputToStartLabel(custom.start) ??
+      (custom.start.trim() || undefined)
     applyGame(
       makeManualGame({
         opponent: custom.opponent,
         date: custom.date,
+        start,
         venue: custom.venue,
         note: custom.note,
         tournamentUrl: custom.tournamentUrl,
@@ -647,6 +662,28 @@ export default function App() {
           >
             Custom game
           </button>
+          <button
+            type="button"
+            onClick={() => setKeepAwake(!keepAwake)}
+            aria-pressed={keepAwake}
+            className="font-semibold uppercase tracking-[0.12em] text-[var(--muted)] underline decoration-[var(--panel-edge)] underline-offset-2"
+            title={
+              wakeLockSupport === 'unsupported'
+                ? 'Screen Wake Lock needs a recent iOS Safari (≈16.4+)'
+                : keepAwake
+                  ? 'Screen stays on while this app is open'
+                  : 'Tap to keep screen on during the game'
+            }
+          >
+            Keep awake{' '}
+            {wakeLockSupport === 'unsupported'
+              ? '· N/A'
+              : keepAwake
+                ? wakeLockActive
+                  ? '· ON'
+                  : '· …'
+                : '· off'}
+          </button>
         </div>
         {status ? (
           <p className="mt-1 text-[10px] text-[var(--muted)]">{status}</p>
@@ -718,6 +755,23 @@ export default function App() {
                 type="date"
                 value={custom.date}
                 onChange={(e) => setCustom({ ...custom, date: e.target.value })}
+                className="w-full rounded-xl border border-[var(--panel-edge)] bg-[#0e1620] px-4 py-4 text-lg font-medium text-[var(--ink)] shadow-inner outline-none focus:border-[var(--ice)] focus:ring-2 focus:ring-[var(--ice)]/35"
+              />
+            </label>
+            <label className="block" htmlFor={`${uid}-start`}>
+              <span className="mb-1.5 block text-sm font-semibold uppercase tracking-[0.12em] text-[var(--ice)]">
+                Start time{' '}
+                <span className="normal-case tracking-normal opacity-70">
+                  (optional)
+                </span>
+              </span>
+              <input
+                id={`${uid}-start`}
+                type="time"
+                value={custom.start}
+                onChange={(e) =>
+                  setCustom({ ...custom, start: e.target.value })
+                }
                 className="w-full rounded-xl border border-[var(--panel-edge)] bg-[#0e1620] px-4 py-4 text-lg font-medium text-[var(--ink)] shadow-inner outline-none focus:border-[var(--ice)] focus:ring-2 focus:ring-[var(--ice)]/35"
               />
             </label>

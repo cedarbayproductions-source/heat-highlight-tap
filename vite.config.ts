@@ -5,7 +5,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 const base = process.env.VITE_BASE || '/'
 /** Bump with BUILD_STAMP so Workbox opens a new cache and drops the stuck Goal-only SW. */
-const PWA_CACHE_ID = 'heat-highlight-tap-export-xml-2'
+const PWA_CACHE_ID = 'heat-highlight-tap-shift-cutoff-1'
 
 export default defineConfig({
   base,
