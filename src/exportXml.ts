@@ -1,7 +1,8 @@
 import {
   FRAME_RATE,
-  buildMediaAnchor,
-  buildMediaWindows,
+  anchorLabel,
+  buildMediaPlan,
+  formatMediaTimecode,
   framesToNtscTimebase,
   masterClipFileName,
   masterClipPathUrl,
@@ -182,20 +183,23 @@ export type ExportXmlResult = {
   xml: string
   filename: string
   warnedNoSync: boolean
+  reanchoredForPreSync: boolean
   shiftCount: number
   goalCount: number
   masterFileName: string
   pathurl: string
   frameRate: number
   anchorLabel: string
+  syncMediaMs: number
+  warnings: string[]
 }
 
 export function buildFcpXml(
   taps: TapEvent[],
   game: ActiveGame,
 ): ExportXmlResult {
-  const anchor = buildMediaAnchor(taps)
-  const { shifts, goals } = buildMediaWindows(taps, anchor)
+  const plan = buildMediaPlan(taps)
+  const { anchor, shifts, goals, warnings } = plan
   const fileName = masterClipFileName({
     opponentShort: game.opponentShort,
     date: game.date,
@@ -258,11 +262,14 @@ export function buildFcpXml(
     )
   }
 
-  const warningComment = anchor.warnedNoSync
-    ? `<!-- WARNING: No Sync taps — media times are relative to the earliest wall stamp and may be wrong. Add a Sync (Puck drop preferred) and re-export. -->\n`
-    : anchor.sync
-      ? `<!-- Sync anchor: ${esc(anchor.sync.syncType)} · ${esc(anchor.sync.period)} ${esc(anchor.sync.gameClock)} @ ${esc(anchor.sync.wallTimeIso)} = media 00:00:00:00. Slip master so this moment is at file start (or nudge after Relink). Frame rate ${FRAME_RATE} (timebase 30 NTSC). -->\n`
-      : ''
+  let warningComment = ''
+  if (anchor.warnedNoSync) {
+    warningComment = `<!-- WARNING: No Sync taps — media times are relative to the earliest content wall and may be wrong. Add a Sync (Puck drop preferred) and re-export. -->\n`
+  } else if (anchor.sync && anchor.reanchoredForPreSync) {
+    warningComment = `<!-- Sync: ${esc(anchor.sync.syncType)} · ${esc(anchor.sync.period)} ${esc(anchor.sync.gameClock)} @ ${esc(anchor.sync.wallTimeIso)} = media ${esc(formatMediaTimecode(anchor.syncMediaMs))} (re-anchored so pre-Sync ice is preserved). Media 00:00:00:00 = earliest cut In — master must include film before Sync. Frame rate ${FRAME_RATE} (timebase 30 NTSC). -->\n`
+  } else if (anchor.sync) {
+    warningComment = `<!-- Sync anchor: ${esc(anchor.sync.syncType)} · ${esc(anchor.sync.period)} ${esc(anchor.sync.gameClock)} @ ${esc(anchor.sync.wallTimeIso)} = media 00:00:00:00. Slip master so this moment is at file start (or nudge after Relink). Frame rate ${FRAME_RATE} (timebase 30 NTSC). -->\n`
+  }
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE xmeml>
@@ -279,20 +286,19 @@ ${warningComment}  <project>
   const stamp = new Date().toISOString().replace(/[:.]/g, '-')
   const filename = `heat-highlight-premiere-${stamp}.xml`
 
-  const anchorLabel = anchor.sync
-    ? `${anchor.sync.syncType} · ${anchor.sync.period} ${anchor.sync.gameClock}`
-    : 'no Sync (earliest tap = 0)'
-
   return {
     xml,
     filename,
     warnedNoSync: anchor.warnedNoSync,
+    reanchoredForPreSync: anchor.reanchoredForPreSync,
     shiftCount: shifts.length,
     goalCount: goals.length,
     masterFileName: fileName,
     pathurl,
     frameRate: FRAME_RATE,
-    anchorLabel,
+    anchorLabel: anchorLabel(plan),
+    syncMediaMs: anchor.syncMediaMs,
+    warnings,
   }
 }
 

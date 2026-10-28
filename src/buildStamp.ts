@@ -1,2 +1,2 @@
 /** Bump this when forcing PWA clients off a stuck service worker. */
-export const BUILD_STAMP = 'no-remind-1'
+export const BUILD_STAMP = 'shift-cutoff-1'

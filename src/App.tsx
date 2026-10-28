@@ -544,11 +544,15 @@ export default function App() {
     const result = exportFcpXml(taps, game)
     if (result.warnedNoSync) {
       window.alert(
-        `Exported ${result.filename}\n\nNo Sync taps — media In/Out are relative to the earliest wall stamp and may be wrong in Premiere. Add a Sync (Puck drop preferred) and re-export.\n\nMaster path placeholder:\n${result.pathurl}`,
+        `Exported ${result.filename}\n\nNo Sync taps — media In/Out are relative to the earliest content wall and may be wrong in Premiere. Add a Sync (Puck drop preferred) and re-export.\n\nMaster path placeholder:\n${result.pathurl}`,
+      )
+    } else if (result.reanchoredForPreSync) {
+      window.alert(
+        `Exported ${result.filename}\n\n${result.shiftCount} shift clip(s) · ${result.goalCount} goal clip(s)\nAnchor: ${result.anchorLabel}\nPre-Sync ice preserved — master must include film before Sync.\nFrame rate: ${result.frameRate}\n\nPut your game film at:\nMEDIA/${result.masterFileName}\n(or Relink after import)`,
       )
     } else {
       window.alert(
-        `Exported ${result.filename}\n\n${result.shiftCount} shift clip(s) · ${result.goalCount} goal clip(s)\nAnchor: ${result.anchorLabel} = media 00:00\nFrame rate: ${result.frameRate}\n\nPut your game film at:\nMEDIA/${result.masterFileName}\n(or Relink after import)`,
+        `Exported ${result.filename}\n\n${result.shiftCount} shift clip(s) · ${result.goalCount} goal clip(s)\nAnchor: ${result.anchorLabel}\nFrame rate: ${result.frameRate}\n\nPut your game film at:\nMEDIA/${result.masterFileName}\n(or Relink after import)`,
       )
     }
   }
