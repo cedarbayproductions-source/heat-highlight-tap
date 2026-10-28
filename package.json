@@ -9,7 +9,8 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test:xml": "tsx scripts/smoke-export-xml.ts",
-    "media-plan": "tsx scripts/media-plan-from-json.ts"
+    "media-plan": "tsx scripts/media-plan-from-json.ts",
+    "export-xml": "tsx scripts/export-xml-from-json.ts"
   },
   "dependencies": {
     "react": "^19.3.1",
