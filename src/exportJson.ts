@@ -2,6 +2,7 @@ import {
   anchorLabel,
   buildMediaPlan,
   formatMediaTimecode,
+  type BuildMediaPlanOpts,
   type MediaPlan,
 } from './mediaTime'
 import type { TapEvent } from './types'
@@ -18,9 +19,13 @@ export type HeatHighlightExportV2 = {
   /**
    * Corrected media In/Out for agent cuts + Premiere (shared math with XML).
    * Prefer these windows over re-deriving Sync=0 + clamp.
+   * In/Out already include LiveBarn slipMs (pads applied before slip).
    */
   mediaPlan: {
     frameRate: number
+    /** LiveBarn master slip applied to all shift/goal In/Out (ms). */
+    slipMs: number
+    landmark: MediaPlan['landmark']
     anchor: {
       wallMs: number
       mediaMs: number
@@ -37,8 +42,11 @@ export type HeatHighlightExportV2 = {
   }
 }
 
-export function buildExportPayload(taps: TapEvent[]): HeatHighlightExportV2 {
-  const plan = buildMediaPlan(taps)
+export function buildExportPayload(
+  taps: TapEvent[],
+  opts: BuildMediaPlanOpts = {},
+): HeatHighlightExportV2 {
+  const plan = buildMediaPlan(taps, opts)
   return {
     format: EXPORT_JSON_FORMAT,
     version: EXPORT_JSON_VERSION,
@@ -46,6 +54,8 @@ export function buildExportPayload(taps: TapEvent[]): HeatHighlightExportV2 {
     taps,
     mediaPlan: {
       frameRate: plan.frameRate,
+      slipMs: plan.slipMs,
+      landmark: plan.landmark,
       anchor: {
         wallMs: plan.anchor.wallMs,
         mediaMs: plan.anchor.mediaMs,
@@ -63,8 +73,11 @@ export function buildExportPayload(taps: TapEvent[]): HeatHighlightExportV2 {
   }
 }
 
-export function tapsJsonText(taps: TapEvent[]): string {
-  return JSON.stringify(buildExportPayload(taps), null, 2)
+export function tapsJsonText(
+  taps: TapEvent[],
+  opts: BuildMediaPlanOpts = {},
+): string {
+  return JSON.stringify(buildExportPayload(taps, opts), null, 2)
 }
 
 /** Accept legacy tap arrays or v2 export envelopes. */
@@ -82,8 +95,24 @@ export function parseExportTaps(raw: unknown): TapEvent[] {
   )
 }
 
-export function exportJson(taps: TapEvent[]): void {
-  const blob = new Blob([tapsJsonText(taps)], {
+/** Read slip/landmark from a v2 envelope (0 / null when absent). */
+export function parseExportSlip(raw: unknown): BuildMediaPlanOpts {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const plan = (raw as HeatHighlightExportV2).mediaPlan
+  if (!plan || typeof plan !== 'object') return {}
+  const slipMs =
+    typeof plan.slipMs === 'number' && Number.isFinite(plan.slipMs)
+      ? plan.slipMs
+      : 0
+  const landmark = plan.landmark ?? null
+  return { slipMs, landmark }
+}
+
+export function exportJson(
+  taps: TapEvent[],
+  opts: BuildMediaPlanOpts = {},
+): void {
+  const blob = new Blob([tapsJsonText(taps, opts)], {
     type: 'application/json',
   })
   const url = URL.createObjectURL(blob)

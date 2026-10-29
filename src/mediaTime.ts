@@ -42,12 +42,32 @@ export type MediaWindow = {
   mediaDurationMs: number
 }
 
+export type MediaPlanLandmark = {
+  kind: 'sync' | 'shiftOn'
+  shiftIndex: number | null
+  sourceId: string | null
+  wallMs: number
+  mediaMs: number
+}
+
 export type MediaPlan = {
   frameRate: number
   anchor: MediaAnchor
   shifts: MediaWindow[]
   goals: MediaWindow[]
   warnings: string[]
+  /**
+   * LiveBarn master slip (ms) added to every Sync-relative In/Out.
+   * Pads (±3s shift / goal pads) are applied in Sync-relative space first;
+   * slip then shifts the whole padded window.
+   */
+  slipMs: number
+  landmark: MediaPlanLandmark | null
+}
+
+export type BuildMediaPlanOpts = {
+  slipMs?: number
+  landmark?: MediaPlanLandmark | null
 }
 
 function isSync(e: TapEvent): e is SyncEvent {
@@ -176,9 +196,25 @@ export function formatMediaTimecode(ms: number, fps = FRAME_RATE): string {
  * Pre-Sync ice is preserved via re-anchor in {@link buildMediaAnchor} — not by
  * silently clamping In to 0 and shortening the clip.
  */
+function applySlipFloor(
+  inRaw: number,
+  outRaw: number,
+  slipMs: number,
+): { inMs: number; outMs: number } {
+  const slippedIn = inRaw + slipMs
+  const slippedOut = outRaw + slipMs
+  // Safety floor only — preserve padded duration if a window undershoots origin.
+  const paddedDur = Math.max(1, slippedOut - slippedIn)
+  const inMs = Math.max(0, slippedIn)
+  const outMs =
+    slippedIn < 0 ? inMs + paddedDur : Math.max(inMs + 1, slippedOut)
+  return { inMs, outMs }
+}
+
 export function buildMediaWindows(
   taps: TapEvent[],
   anchor: MediaAnchor,
+  slipMs = 0,
 ): { shifts: MediaWindow[]; goals: MediaWindow[] } {
   const shiftsChrono = taps
     .filter(isShift)
@@ -188,14 +224,10 @@ export function buildMediaWindows(
     .sort((a, b) => a.wallTimeMs - b.wallTimeMs)
 
   const shifts: MediaWindow[] = shiftsChrono.map((s, i) => {
+    // Pads first (Sync-relative), then LiveBarn slip on the whole window.
     const inRaw = wallToMediaMs(s.startWallMs, anchor) - SHIFT_PAD_BEFORE_MS
     const outRaw = wallToMediaMs(s.endWallMs, anchor) + SHIFT_PAD_AFTER_MS
-    // Safety floor only — after re-anchor, inRaw should already be ≥ 0.
-    // Preserve padded duration if a window still undershoots origin.
-    const paddedDur = Math.max(1, outRaw - inRaw)
-    const inMs = Math.max(0, inRaw)
-    const outMs =
-      inRaw < 0 ? inMs + paddedDur : Math.max(inMs + 1, outRaw)
+    const { inMs, outMs } = applySlipFloor(inRaw, outRaw, slipMs)
     return {
       inMs,
       outMs,
@@ -211,10 +243,7 @@ export function buildMediaWindows(
     const tap = wallToMediaMs(g.wallTimeMs, anchor)
     const inRaw = tap - GOAL_PAD_BEFORE_MS
     const outRaw = tap + GOAL_PAD_AFTER_MS
-    const paddedDur = Math.max(1, outRaw - inRaw)
-    const inMs = Math.max(0, inRaw)
-    const outMs =
-      inRaw < 0 ? inMs + paddedDur : Math.max(inMs + 1, outRaw)
+    const { inMs, outMs } = applySlipFloor(inRaw, outRaw, slipMs)
     return {
       inMs,
       outMs,
@@ -239,9 +268,14 @@ export function anchorLabel(plan: MediaPlan): string {
   return `${base} = media 00:00:00:00`
 }
 
-export function buildMediaPlan(taps: TapEvent[]): MediaPlan {
+export function buildMediaPlan(
+  taps: TapEvent[],
+  opts: BuildMediaPlanOpts = {},
+): MediaPlan {
+  const slipMs = opts.slipMs ?? 0
+  const landmark = opts.landmark ?? null
   const anchor = buildMediaAnchor(taps)
-  const { shifts, goals } = buildMediaWindows(taps, anchor)
+  const { shifts, goals } = buildMediaWindows(taps, anchor, slipMs)
   const warnings: string[] = []
 
   if (anchor.warnedNoSync) {
@@ -252,6 +286,12 @@ export function buildMediaPlan(taps: TapEvent[]): MediaPlan {
   if (anchor.reanchoredForPreSync && anchor.sync) {
     warnings.push(
       `Re-anchored for pre-Sync ice: Sync (${anchor.sync.syncType}) is at media ${formatMediaTimecode(anchor.syncMediaMs)}, not 00:00:00:00. Master file must include film before Sync; slip so media 00:00 is the earliest cut In.`,
+    )
+  }
+  if (slipMs !== 0) {
+    const sign = slipMs > 0 ? '+' : ''
+    warnings.push(
+      `LiveBarn slip ${sign}${(slipMs / 1000).toFixed(3).replace(/\.?0+$/, '')}s applied to all cut In/Out (after ±${SHIFT_PAD_BEFORE_MS / 1000}s shift / goal pads).`,
     )
   }
 
@@ -270,6 +310,8 @@ export function buildMediaPlan(taps: TapEvent[]): MediaPlan {
     shifts,
     goals,
     warnings,
+    slipMs,
+    landmark,
   }
 }
 

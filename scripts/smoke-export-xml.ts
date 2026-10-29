@@ -162,6 +162,46 @@ assert(preXml.reanchoredForPreSync, 'XML reports re-anchor')
 assert(preXml.xml.includes('re-anchored'), 'XML comment mentions re-anchor')
 assert(preXml.xml.includes('<in>0</in>'), 'XML shift in at 0 after re-anchor')
 
+// LiveBarn slip: landmark Shift On at media time → all In/Out shift by slipMs.
+const landmarkMediaMs = 1_541_000
+const relativeOn = shiftStart - syncWall // Sync = media 0
+const expectedSlip = landmarkMediaMs - relativeOn
+const slipped = buildMediaPlan(taps, {
+  slipMs: expectedSlip,
+  landmark: {
+    kind: 'shiftOn',
+    shiftIndex: 1,
+    sourceId: 'shift-1',
+    wallMs: shiftStart,
+    mediaMs: landmarkMediaMs,
+  },
+})
+assert(slipped.slipMs === expectedSlip, 'slipMs stored')
+assert(slipped.shifts.length === 1, 'slipped shift present')
+const slippedShift = slipped.shifts[0]
+assert(
+  slippedShift.inMs ===
+    relativeOn - SHIFT_PAD_BEFORE_MS + expectedSlip,
+  `slipped In = landmark − pad (${slippedShift.inMs})`,
+)
+assert(
+  slippedShift.mediaDurationMs ===
+    42_000 + SHIFT_PAD_BEFORE_MS + SHIFT_PAD_AFTER_MS,
+  'slip preserves padded duration',
+)
+const slippedXml = buildFcpXml(taps, game, { slipMs: expectedSlip })
+assert(slippedXml.slipMs === expectedSlip, 'XML carries slipMs')
+assert(slippedXml.xml.includes('LiveBarn slip'), 'XML comment mentions slip')
+const slippedInFrames = msToFrames(
+  relativeOn - SHIFT_PAD_BEFORE_MS + expectedSlip,
+)
+assert(
+  slippedXml.xml.includes(`<in>${slippedInFrames}</in>`) ||
+    slippedXml.xml.includes(`<in>${slippedInFrames - 1}</in>`) ||
+    slippedXml.xml.includes(`<in>${slippedInFrames + 1}</in>`),
+  `XML slipped in ~${slippedInFrames}`,
+)
+
 console.log('smoke-export-xml OK')
 console.log('  master:', withSync.masterFileName)
 console.log('  pathurl:', withSync.pathurl)
@@ -172,4 +212,10 @@ console.log(
   preShift.mediaDurationMs,
   'ms · syncMediaMs',
   prePlan.anchor.syncMediaMs,
+)
+console.log(
+  '  LB slip:',
+  expectedSlip,
+  'ms · slipped In',
+  slippedShift.inMs,
 )
