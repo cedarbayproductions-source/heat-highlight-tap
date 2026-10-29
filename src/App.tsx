@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react'
 import { BUILD_STAMP } from './buildStamp'
-import { exportJson } from './exportJson'
+import { copyJson, exportJson } from './exportJson'
 import { exportFcpXml } from './exportXml'
 import {
   FALLBACK_GAME,
@@ -220,6 +220,9 @@ export default function App() {
   const [flash, setFlash] = useState(false)
   const [clockError, setClockError] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
+  const [copyLabel, setCopyLabel] = useState<'Copy JSON' | 'Copied' | 'Copy failed'>(
+    'Copy JSON',
+  )
   const [refreshing, setRefreshing] = useState(false)
   const [openShift, setOpenShift] = useState<OpenShift | null>(() =>
     loadOpenShift(),
@@ -649,6 +652,12 @@ export default function App() {
     if (!window.confirm('Clear all saved taps on this phone?')) return
     applyTaps([])
     setOpen(null)
+  }
+
+  async function onCopyJson() {
+    const ok = await copyJson(taps, mediaPlanOpts())
+    setCopyLabel(ok ? 'Copied' : 'Copy failed')
+    window.setTimeout(() => setCopyLabel('Copy JSON'), 2000)
   }
 
   function onExportXml() {
@@ -1388,6 +1397,14 @@ export default function App() {
             Today&apos;s taps
           </h2>
           <div className="flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => void onCopyJson()}
+              disabled={!taps.length || copyLabel === 'Copied'}
+              className="rounded-lg border border-[var(--ice)]/60 bg-[rgba(120,180,220,0.12)] px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--ice)] disabled:opacity-30"
+            >
+              {copyLabel}
+            </button>
             <button
               type="button"
               onClick={() => exportJson(taps, mediaPlanOpts())}
