@@ -7,6 +7,7 @@ import {
   masterClipFileName,
   masterClipPathUrl,
   msToFrames,
+  type BuildMediaPlanOpts,
   type MediaWindow,
 } from './mediaTime'
 import type { ActiveGame, TapEvent } from './types'
@@ -191,15 +192,17 @@ export type ExportXmlResult = {
   frameRate: number
   anchorLabel: string
   syncMediaMs: number
+  slipMs: number
   warnings: string[]
 }
 
 export function buildFcpXml(
   taps: TapEvent[],
   game: ActiveGame,
+  opts: BuildMediaPlanOpts = {},
 ): ExportXmlResult {
-  const plan = buildMediaPlan(taps)
-  const { anchor, shifts, goals, warnings } = plan
+  const plan = buildMediaPlan(taps, opts)
+  const { anchor, shifts, goals, warnings, slipMs } = plan
   const fileName = masterClipFileName({
     opponentShort: game.opponentShort,
     date: game.date,
@@ -262,13 +265,20 @@ export function buildFcpXml(
     )
   }
 
+  const slipNote =
+    slipMs !== 0
+      ? ` LiveBarn slip ${slipMs > 0 ? '+' : ''}${slipMs}ms applied to all In/Out after Sync pads.`
+      : ''
+
   let warningComment = ''
   if (anchor.warnedNoSync) {
-    warningComment = `<!-- WARNING: No Sync taps — media times are relative to the earliest content wall and may be wrong. Add a Sync (Puck drop preferred) and re-export. -->\n`
+    warningComment = `<!-- WARNING: No Sync taps — media times are relative to the earliest content wall and may be wrong. Add a Sync (Puck drop preferred) and re-export.${slipNote} -->\n`
   } else if (anchor.sync && anchor.reanchoredForPreSync) {
-    warningComment = `<!-- Sync: ${esc(anchor.sync.syncType)} · ${esc(anchor.sync.period)} ${esc(anchor.sync.gameClock)} @ ${esc(anchor.sync.wallTimeIso)} = media ${esc(formatMediaTimecode(anchor.syncMediaMs))} (re-anchored so pre-Sync ice is preserved). Media 00:00:00:00 = earliest cut In — master must include film before Sync. Frame rate ${FRAME_RATE} (timebase 30 NTSC). -->\n`
+    warningComment = `<!-- Sync: ${esc(anchor.sync.syncType)} · ${esc(anchor.sync.period)} ${esc(anchor.sync.gameClock)} @ ${esc(anchor.sync.wallTimeIso)} = media ${esc(formatMediaTimecode(anchor.syncMediaMs))} (re-anchored so pre-Sync ice is preserved). Media 00:00:00:00 = earliest cut In — master must include film before Sync. Frame rate ${FRAME_RATE} (timebase 30 NTSC).${slipNote} -->\n`
   } else if (anchor.sync) {
-    warningComment = `<!-- Sync anchor: ${esc(anchor.sync.syncType)} · ${esc(anchor.sync.period)} ${esc(anchor.sync.gameClock)} @ ${esc(anchor.sync.wallTimeIso)} = media 00:00:00:00. Slip master so this moment is at file start (or nudge after Relink). Frame rate ${FRAME_RATE} (timebase 30 NTSC). -->\n`
+    warningComment = `<!-- Sync anchor: ${esc(anchor.sync.syncType)} · ${esc(anchor.sync.period)} ${esc(anchor.sync.gameClock)} @ ${esc(anchor.sync.wallTimeIso)} = media 00:00:00:00 (Sync mapping).${slipNote || ' Use LiveBarn slip in app when masters do not start at Sync.'} Frame rate ${FRAME_RATE} (timebase 30 NTSC). -->\n`
+  } else if (slipNote) {
+    warningComment = `<!--${slipNote} -->\n`
   }
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -298,12 +308,17 @@ ${warningComment}  <project>
     frameRate: FRAME_RATE,
     anchorLabel: anchorLabel(plan),
     syncMediaMs: anchor.syncMediaMs,
+    slipMs,
     warnings,
   }
 }
 
-export function exportFcpXml(taps: TapEvent[], game: ActiveGame): ExportXmlResult {
-  const result = buildFcpXml(taps, game)
+export function exportFcpXml(
+  taps: TapEvent[],
+  game: ActiveGame,
+  opts: BuildMediaPlanOpts = {},
+): ExportXmlResult {
+  const result = buildFcpXml(taps, game, opts)
   downloadText(result.filename, result.xml, 'application/xml')
   return result
 }

@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react'
 import { BUILD_STAMP } from './buildStamp'
-import { exportJson } from './exportJson'
+import { copyJson, exportJson } from './exportJson'
 import { exportFcpXml } from './exportXml'
 import {
   FALLBACK_GAME,
@@ -9,6 +9,19 @@ import {
   hintFromTournamentUrl,
   makeManualGame,
 } from './game'
+import {
+  chronoShifts,
+  clearSlipForGame,
+  formatMediaClock,
+  formatSlipSeconds,
+  loadSlipForGame,
+  makeLandmarkSlip,
+  makeManualSlip,
+  parseMediaTimeInput,
+  saveSlipForGame,
+  type LandmarkKind,
+  type LiveBarnSlipState,
+} from './liveBarnSlip'
 import { DEFAULT_SHIFT_PLAYER, ORDERED_ROSTER, playerLabel } from './roster'
 import {
   labelsFromGame,
@@ -207,6 +220,9 @@ export default function App() {
   const [flash, setFlash] = useState(false)
   const [clockError, setClockError] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
+  const [copyLabel, setCopyLabel] = useState<'Copy JSON' | 'Copied' | 'Copy failed'>(
+    'Copy JSON',
+  )
   const [refreshing, setRefreshing] = useState(false)
   const [openShift, setOpenShift] = useState<OpenShift | null>(() =>
     loadOpenShift(),
@@ -219,6 +235,15 @@ export default function App() {
   const [pendingShiftBackdate, setPendingShiftBackdate] = useState<
     number | null
   >(null)
+  const [lbSlip, setLbSlip] = useState<LiveBarnSlipState>(() =>
+    loadSlipForGame(loadActiveGame()),
+  )
+  const [slipOpen, setSlipOpen] = useState(false)
+  const [slipKind, setSlipKind] = useState<LandmarkKind>('shiftOn')
+  const [slipShiftIndex, setSlipShiftIndex] = useState(1)
+  const [slipMediaInput, setSlipMediaInput] = useState('')
+  const [slipManualInput, setSlipManualInput] = useState('')
+  const [slipError, setSlipError] = useState<string | null>(null)
   const {
     keepAwake,
     setKeepAwake,
@@ -228,6 +253,7 @@ export default function App() {
 
   useEffect(() => {
     setTaps(loadTaps(game))
+    setLbSlip(loadSlipForGame(game))
     if (game.source === 'manual') {
       setStatus('Custom game (manual)')
       return
@@ -240,6 +266,7 @@ export default function App() {
         if (cancelled) return
         setGame(next)
         saveActiveGame(next)
+        setLbSlip(loadSlipForGame(next))
         setStatus(
           next.date
             ? `CAHA · ${next.date}${next.start ? ` ${next.start}` : ''}`
@@ -266,12 +293,99 @@ export default function App() {
   function applyGame(next: ActiveGame, label: string) {
     setGame(next)
     saveActiveGame(next)
+    setLbSlip(loadSlipForGame(next))
     setStatus(label)
   }
 
   function applyTaps(next: TapEvent[]) {
     setTaps(next)
     saveTaps(next)
+  }
+
+  function mediaPlanOpts() {
+    return {
+      slipMs: lbSlip.slipMs,
+      landmark: lbSlip.landmark,
+    }
+  }
+
+  function applyLbSlip(next: LiveBarnSlipState) {
+    setLbSlip(next)
+    saveSlipForGame(game, next)
+  }
+
+  function openSlipSheet() {
+    const shifts = chronoShifts(taps)
+    setSlipKind(
+      lbSlip.landmark?.kind === 'sync'
+        ? 'sync'
+        : shifts.length
+          ? 'shiftOn'
+          : 'sync',
+    )
+    setSlipShiftIndex(
+      lbSlip.landmark?.shiftIndex && lbSlip.landmark.shiftIndex >= 1
+        ? lbSlip.landmark.shiftIndex
+        : 1,
+    )
+    setSlipMediaInput(
+      lbSlip.landmark
+        ? formatMediaClock(lbSlip.landmark.mediaMs)
+        : '',
+    )
+    setSlipManualInput(
+      lbSlip.mode === 'manual' && lbSlip.slipMs !== 0
+        ? (lbSlip.slipMs / 1000).toString()
+        : '',
+    )
+    setSlipError(null)
+    setSlipOpen(true)
+  }
+
+  function applyLandmarkSlip() {
+    const mediaMs = parseMediaTimeInput(slipMediaInput)
+    if (mediaMs == null || mediaMs < 0) {
+      setSlipError('Enter media time as MM:SS or seconds (e.g. 25:41 or 1541)')
+      return
+    }
+    if (slipKind === 'sync' && !taps.some((t) => t.type === 'sync')) {
+      setSlipError('Add a Sync tap first')
+      return
+    }
+    if (slipKind === 'shiftOn' && !chronoShifts(taps).length) {
+      setSlipError('Record a finished Shift first')
+      return
+    }
+    const next = makeLandmarkSlip({
+      taps,
+      kind: slipKind,
+      shiftIndex1Based: slipKind === 'shiftOn' ? slipShiftIndex : null,
+      landmarkMediaMs: mediaMs,
+    })
+    if (!next) {
+      setSlipError('Could not resolve landmark — check Sync / Shift index')
+      return
+    }
+    applyLbSlip(next)
+    setSlipOpen(false)
+    setSlipError(null)
+  }
+
+  function applyManualSlip() {
+    const ms = parseMediaTimeInput(slipManualInput)
+    if (ms == null) {
+      setSlipError('Enter slip seconds (+/−), e.g. 0.171 or −3')
+      return
+    }
+    applyLbSlip(makeManualSlip(ms))
+    setSlipOpen(false)
+    setSlipError(null)
+  }
+
+  function resetLbSlip() {
+    applyLbSlip(clearSlipForGame(game))
+    setSlipOpen(false)
+    setSlipError(null)
   }
 
   function stampWall() {
@@ -540,19 +654,29 @@ export default function App() {
     setOpen(null)
   }
 
+  async function onCopyJson() {
+    const ok = await copyJson(taps, mediaPlanOpts())
+    setCopyLabel(ok ? 'Copied' : 'Copy failed')
+    window.setTimeout(() => setCopyLabel('Copy JSON'), 2000)
+  }
+
   function onExportXml() {
-    const result = exportFcpXml(taps, game)
+    const result = exportFcpXml(taps, game, mediaPlanOpts())
+    const slipLine =
+      result.slipMs !== 0
+        ? `\nLiveBarn slip: ${formatSlipSeconds(result.slipMs)} (pads still ±3s after slip)`
+        : ''
     if (result.warnedNoSync) {
       window.alert(
-        `Exported ${result.filename}\n\nNo Sync taps — media In/Out are relative to the earliest content wall and may be wrong in Premiere. Add a Sync (Puck drop preferred) and re-export.\n\nMaster path placeholder:\n${result.pathurl}`,
+        `Exported ${result.filename}\n\nNo Sync taps — media In/Out are relative to the earliest content wall and may be wrong in Premiere. Add a Sync (Puck drop preferred) and re-export.${slipLine}\n\nMaster path placeholder:\n${result.pathurl}`,
       )
     } else if (result.reanchoredForPreSync) {
       window.alert(
-        `Exported ${result.filename}\n\n${result.shiftCount} shift clip(s) · ${result.goalCount} goal clip(s)\nAnchor: ${result.anchorLabel}\nPre-Sync ice preserved — master must include film before Sync.\nFrame rate: ${result.frameRate}\n\nPut your game film at:\nMEDIA/${result.masterFileName}\n(or Relink after import)`,
+        `Exported ${result.filename}\n\n${result.shiftCount} shift clip(s) · ${result.goalCount} goal clip(s)\nAnchor: ${result.anchorLabel}${slipLine}\nPre-Sync ice preserved — master must include film before Sync.\nFrame rate: ${result.frameRate}\n\nPut your game film at:\nMEDIA/${result.masterFileName}\n(or Relink after import)`,
       )
     } else {
       window.alert(
-        `Exported ${result.filename}\n\n${result.shiftCount} shift clip(s) · ${result.goalCount} goal clip(s)\nAnchor: ${result.anchorLabel}\nFrame rate: ${result.frameRate}\n\nPut your game film at:\nMEDIA/${result.masterFileName}\n(or Relink after import)`,
+        `Exported ${result.filename}\n\n${result.shiftCount} shift clip(s) · ${result.goalCount} goal clip(s)\nAnchor: ${result.anchorLabel}${slipLine}\nFrame rate: ${result.frameRate}\n\nPut your game film at:\nMEDIA/${result.masterFileName}\n(or Relink after import)`,
       )
     }
   }
@@ -1085,7 +1209,189 @@ export default function App() {
         </section>
       ) : null}
 
+      {slipOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={`${uid}-slip-title`}
+        >
+          <div className="sheet-enter max-h-[90dvh] w-full max-w-sm overflow-y-auto rounded-2xl border border-[var(--panel-edge)] bg-[var(--panel)] p-5 shadow-xl backdrop-blur-sm">
+            <p
+              id={`${uid}-slip-title`}
+              className="font-[family-name:var(--display)] text-xl font-semibold uppercase tracking-wide text-[var(--ink)]"
+            >
+              LiveBarn slip
+            </p>
+            <p className="mt-2 text-sm text-[var(--muted)]">
+              Sync still maps media 0. Set one landmark so all cuts shift by a
+              fixed slip to match the LiveBarn file. Shift pads (±3s) still apply
+              after slip.
+            </p>
+
+            <div className="mt-4 flex flex-col gap-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--ice)]">
+                Landmark (preferred)
+              </p>
+              <label className="block" htmlFor={`${uid}-slip-kind`}>
+                <span className="mb-1.5 block text-sm font-semibold uppercase tracking-[0.12em] text-[var(--ice)]">
+                  Moment
+                </span>
+                <select
+                  id={`${uid}-slip-kind`}
+                  value={slipKind}
+                  onChange={(e) =>
+                    setSlipKind(e.target.value as LandmarkKind)
+                  }
+                  className="w-full appearance-none rounded-xl border border-[var(--panel-edge)] bg-[#0e1620] px-4 py-3 text-base font-medium text-[var(--ink)] outline-none focus:border-[var(--ice)] focus:ring-2 focus:ring-[var(--ice)]/35"
+                >
+                  <option value="shiftOn">Shift On</option>
+                  <option value="sync">Sync</option>
+                </select>
+              </label>
+              {slipKind === 'shiftOn' ? (
+                <label className="block" htmlFor={`${uid}-slip-shift`}>
+                  <span className="mb-1.5 block text-sm font-semibold uppercase tracking-[0.12em] text-[var(--ice)]">
+                    Shift #
+                  </span>
+                  <select
+                    id={`${uid}-slip-shift`}
+                    value={slipShiftIndex}
+                    onChange={(e) =>
+                      setSlipShiftIndex(Number(e.target.value))
+                    }
+                    className="w-full appearance-none rounded-xl border border-[var(--panel-edge)] bg-[#0e1620] px-4 py-3 text-base font-medium text-[var(--ink)] outline-none focus:border-[var(--ice)] focus:ring-2 focus:ring-[var(--ice)]/35"
+                  >
+                    {chronoShifts(taps).length ? (
+                      chronoShifts(taps).map((s, i) => (
+                        <option key={s.id} value={i + 1}>
+                          Shift {String(i + 1).padStart(2, '0')} ·{' '}
+                          {fmtTime(s.startWallIso)}
+                        </option>
+                      ))
+                    ) : (
+                      <option value={1}>No finished shifts yet</option>
+                    )}
+                  </select>
+                </label>
+              ) : null}
+              <label className="block" htmlFor={`${uid}-slip-media`}>
+                <span className="mb-1.5 block text-sm font-semibold uppercase tracking-[0.12em] text-[var(--ice)]">
+                  Appears at media
+                </span>
+                <input
+                  id={`${uid}-slip-media`}
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  placeholder="MM:SS or seconds · e.g. 25:41"
+                  value={slipMediaInput}
+                  onChange={(e) => setSlipMediaInput(e.target.value)}
+                  className="w-full rounded-xl border border-[var(--panel-edge)] bg-[#0e1620] px-4 py-3 text-lg font-medium tabular-nums text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:border-[var(--ice)] focus:ring-2 focus:ring-[var(--ice)]/35"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={applyLandmarkSlip}
+                className="w-full rounded-xl border-[3px] border-[var(--ice)] bg-[linear-gradient(165deg,#1a3a4d,#0e2433)] px-4 py-3 font-[family-name:var(--display)] text-base font-bold uppercase tracking-wide text-[var(--ink)]"
+              >
+                Set from landmark
+              </button>
+
+              <div className="my-1 border-t border-[var(--panel-edge)]" />
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted)]">
+                Or enter slip seconds
+              </p>
+              <label className="block" htmlFor={`${uid}-slip-manual`}>
+                <span className="mb-1.5 block text-sm font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
+                  Slip (+/− seconds)
+                </span>
+                <input
+                  id={`${uid}-slip-manual`}
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  placeholder="e.g. 0.171 or −3"
+                  value={slipManualInput}
+                  onChange={(e) => setSlipManualInput(e.target.value)}
+                  className="w-full rounded-xl border border-[var(--panel-edge)] bg-[#0e1620] px-4 py-3 text-lg font-medium tabular-nums text-[var(--ink)] outline-none placeholder:text-[var(--muted)] focus:border-[var(--ice)] focus:ring-2 focus:ring-[var(--ice)]/35"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={applyManualSlip}
+                className="w-full rounded-xl border border-[var(--panel-edge)] bg-[#0e1620] px-4 py-2.5 text-sm font-semibold text-[var(--ink)]"
+              >
+                Apply slip seconds
+              </button>
+
+              {slipError ? (
+                <p className="text-sm text-[var(--heat-red-hot)]">{slipError}</p>
+              ) : null}
+
+              <div className="mt-2 flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={resetLbSlip}
+                  className="w-full rounded-xl border border-[var(--panel-edge)] bg-transparent px-4 py-2.5 text-sm font-semibold text-[var(--muted)]"
+                >
+                  Reset slip
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSlipOpen(false)}
+                  className="w-full rounded-xl border border-[var(--panel-edge)] bg-transparent px-4 py-2.5 text-sm font-semibold text-[var(--muted)]"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <section className="mt-auto">
+        <div className="mb-3 rounded-xl border border-[var(--panel-edge)] bg-[var(--panel)] px-4 py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--ice)]">
+                LiveBarn slip
+              </p>
+              <p className="mt-1 text-base font-semibold tabular-nums text-[var(--ink)]">
+                {lbSlip.slipMs === 0 && lbSlip.mode === 'none'
+                  ? 'None · Sync = media 0'
+                  : formatSlipSeconds(lbSlip.slipMs)}
+              </p>
+              <p className="mt-0.5 text-[11px] text-[var(--muted)]">
+                {lbSlip.landmark
+                  ? lbSlip.landmark.kind === 'sync'
+                    ? `Landmark: Sync @ ${formatMediaClock(lbSlip.landmark.mediaMs)}`
+                    : `Landmark: Shift ${String(lbSlip.landmark.shiftIndex ?? '?').padStart(2, '0')} On @ ${formatMediaClock(lbSlip.landmark.mediaMs)}`
+                  : lbSlip.mode === 'manual'
+                    ? 'Manual slip · pads ±3s after'
+                    : 'Set after Sync so cuts match the LB file'}
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-col gap-1.5">
+              <button
+                type="button"
+                onClick={openSlipSheet}
+                className="rounded-lg border border-[var(--ice)]/60 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--ice)]"
+              >
+                Set
+              </button>
+              {lbSlip.slipMs !== 0 || lbSlip.mode !== 'none' ? (
+                <button
+                  type="button"
+                  onClick={resetLbSlip}
+                  className="rounded-lg border border-[var(--panel-edge)] px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]"
+                >
+                  Reset
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </div>
         <div className="mb-3 flex items-end justify-between gap-2">
           <h2 className="font-[family-name:var(--display)] text-xl font-semibold uppercase tracking-wide">
             Today&apos;s taps
@@ -1093,7 +1399,15 @@ export default function App() {
           <div className="flex flex-wrap justify-end gap-2">
             <button
               type="button"
-              onClick={() => exportJson(taps)}
+              onClick={() => void onCopyJson()}
+              disabled={!taps.length || copyLabel === 'Copied'}
+              className="rounded-lg border border-[var(--ice)]/60 bg-[rgba(120,180,220,0.12)] px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--ice)] disabled:opacity-30"
+            >
+              {copyLabel}
+            </button>
+            <button
+              type="button"
+              onClick={() => exportJson(taps, mediaPlanOpts())}
               disabled={!taps.length}
               className="rounded-lg border border-[var(--panel-edge)] px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--ice)] disabled:opacity-30"
             >

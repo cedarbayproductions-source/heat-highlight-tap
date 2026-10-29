@@ -9,7 +9,11 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { buildExportPayload, parseExportTaps } from '../src/exportJson'
+import {
+  buildExportPayload,
+  parseExportSlip,
+  parseExportTaps,
+} from '../src/exportJson'
 import {
   SHIFT_PAD_AFTER_MS,
   SHIFT_PAD_BEFORE_MS,
@@ -26,7 +30,8 @@ function main() {
   }
   const raw = JSON.parse(readFileSync(resolve(inPath), 'utf8')) as unknown
   const taps = parseExportTaps(raw)
-  const payload = buildExportPayload(taps)
+  const slipOpts = parseExportSlip(raw)
+  const payload = buildExportPayload(taps, slipOpts)
   const outPath = resolve(
     process.argv[3] ??
       inPath.replace(/\.json$/i, '') + '.media-plan.json',
@@ -40,7 +45,10 @@ function main() {
   console.log(`  goals: ${mediaPlan.goals.length}`)
   console.log(`  anchor: ${mediaPlan.anchor.label}`)
   console.log(
-    `  shift pads: −${SHIFT_PAD_BEFORE_MS}ms / +${SHIFT_PAD_AFTER_MS}ms`,
+    `  slipMs: ${mediaPlan.slipMs}${mediaPlan.landmark ? ` · landmark ${mediaPlan.landmark.kind}` : ''}`,
+  )
+  console.log(
+    `  shift pads: −${SHIFT_PAD_BEFORE_MS}ms / +${SHIFT_PAD_AFTER_MS}ms (before slip)`,
   )
   for (const w of mediaPlan.shifts) {
     console.log(
