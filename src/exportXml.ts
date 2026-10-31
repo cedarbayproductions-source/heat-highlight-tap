@@ -40,6 +40,19 @@ function rateXml(): string {
         </rate>`
 }
 
+/** LiveBarn masters are commonly mono @ 16 kHz (e.g. Sharks Ice). Declaring
+ *  stereo/48 kHz in XMEML makes Premiere Relink fail on those files. Pass
+ *  `audioChannels: 2` for stereo dumps (e.g. some Cube Olympic feeds). */
+export const DEFAULT_XML_AUDIO_CHANNELS = 1
+export const DEFAULT_XML_AUDIO_SAMPLE_RATE = 16_000
+
+export type ExportXmlAudioOpts = {
+  /** Source audio channel count written to `<channelcount>`. */
+  audioChannels?: number
+  /** Source sample rate written to audio `<samplerate>`. */
+  audioSampleRate?: number
+}
+
 function clipItemXml(opts: {
   id: string
   name: string
@@ -53,6 +66,8 @@ function clipItemXml(opts: {
   masterDurationFrames: number
   pathurl: string
   fileName: string
+  audioChannels: number
+  audioSampleRate: number
 }): string {
   const duration = Math.max(1, opts.endFrame - opts.startFrame)
   return `<clipitem id="${esc(opts.id)}">
@@ -86,9 +101,9 @@ function clipItemXml(opts: {
                 <audio>
                   <samplecharacteristics>
                     <depth>16</depth>
-                    <samplerate>48000</samplerate>
+                    <samplerate>${opts.audioSampleRate}</samplerate>
                   </samplecharacteristics>
-                  <channelcount>2</channelcount>
+                  <channelcount>${opts.audioChannels}</channelcount>
                 </audio>
               </media>
             </file>
@@ -103,6 +118,8 @@ function sequenceXml(opts: {
   pathurl: string
   fileName: string
   masterDurationFrames: number
+  audioChannels: number
+  audioSampleRate: number
 }): string {
   let timeline = 0
   const items: string[] = []
@@ -125,9 +142,18 @@ function sequenceXml(opts: {
         masterDurationFrames: opts.masterDurationFrames,
         pathurl: opts.pathurl,
         fileName: opts.fileName,
+        audioChannels: opts.audioChannels,
+        audioSampleRate: opts.audioSampleRate,
       }),
     )
   })
+
+  const audioTracks = Array.from({ length: Math.max(1, opts.audioChannels) }, () =>
+    `<track>
+              <enabled>TRUE</enabled>
+              <locked>FALSE</locked>
+            </track>`,
+  ).join('\n            ')
 
   const seqDuration = Math.max(1, timeline)
   return `<sequence id="${esc(opts.id)}">
@@ -159,21 +185,14 @@ function sequenceXml(opts: {
             </track>
           </video>
           <audio>
-            <numOutputChannels>2</numOutputChannels>
+            <numOutputChannels>${opts.audioChannels}</numOutputChannels>
             <format>
               <samplecharacteristics>
                 <depth>16</depth>
-                <samplerate>48000</samplerate>
+                <samplerate>${opts.audioSampleRate}</samplerate>
               </samplecharacteristics>
             </format>
-            <track>
-              <enabled>TRUE</enabled>
-              <locked>FALSE</locked>
-            </track>
-            <track>
-              <enabled>TRUE</enabled>
-              <locked>FALSE</locked>
-            </track>
+            ${audioTracks}
           </audio>
         </media>
       </sequence>`
@@ -192,12 +211,18 @@ export type ExportXmlResult = {
   anchorLabel: string
   syncMediaMs: number
   warnings: string[]
+  audioChannels: number
+  audioSampleRate: number
 }
 
 export function buildFcpXml(
   taps: TapEvent[],
   game: ActiveGame,
+  audioOpts: ExportXmlAudioOpts = {},
 ): ExportXmlResult {
+  const audioChannels = audioOpts.audioChannels ?? DEFAULT_XML_AUDIO_CHANNELS
+  const audioSampleRate =
+    audioOpts.audioSampleRate ?? DEFAULT_XML_AUDIO_SAMPLE_RATE
   const plan = buildMediaPlan(taps)
   const { anchor, shifts, goals, warnings } = plan
   const fileName = masterClipFileName({
@@ -230,6 +255,8 @@ export function buildFcpXml(
         pathurl,
         fileName,
         masterDurationFrames,
+        audioChannels,
+        audioSampleRate,
       }),
     )
   }
@@ -243,6 +270,8 @@ export function buildFcpXml(
         pathurl,
         fileName,
         masterDurationFrames,
+        audioChannels,
+        audioSampleRate,
       }),
     )
   }
@@ -258,6 +287,8 @@ export function buildFcpXml(
         pathurl,
         fileName,
         masterDurationFrames,
+        audioChannels,
+        audioSampleRate,
       }),
     )
   }
@@ -299,11 +330,17 @@ ${warningComment}  <project>
     anchorLabel: anchorLabel(plan),
     syncMediaMs: anchor.syncMediaMs,
     warnings,
+    audioChannels,
+    audioSampleRate,
   }
 }
 
-export function exportFcpXml(taps: TapEvent[], game: ActiveGame): ExportXmlResult {
-  const result = buildFcpXml(taps, game)
+export function exportFcpXml(
+  taps: TapEvent[],
+  game: ActiveGame,
+  audioOpts: ExportXmlAudioOpts = {},
+): ExportXmlResult {
+  const result = buildFcpXml(taps, game, audioOpts)
   downloadText(result.filename, result.xml, 'application/xml')
   return result
 }
